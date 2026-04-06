@@ -620,6 +620,38 @@
             color: var(--text-primary);
         }
 
+        /* Error State */
+        .error-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: var(--text-secondary);
+        }
+
+        .error-state i {
+            font-size: 4rem;
+            margin-bottom: 20px;
+            color: var(--danger);
+        }
+
+        .error-state h3 {
+            font-size: 1.5rem;
+            margin-bottom: 10px;
+            color: var(--text-primary);
+        }
+
+        .error-state button {
+            margin-top: 20px;
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            border: none;
+            padding: 15px 30px;
+            border-radius: 12px;
+            color: white;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
         /* Modal */
         .modal-overlay {
             position: fixed;
@@ -980,6 +1012,14 @@
             <h3>No games found</h3>
             <p>Try adjusting your search or filters to find what you're looking for.</p>
         </div>
+
+        <!-- Error State -->
+        <div class="error-state" id="errorState" style="display: none;">
+            <i class="fas fa-exclamation-circle"></i>
+            <h3>Something went wrong</h3>
+            <p id="errorMessage">Failed to fetch games. Please try again.</p>
+            <button onclick="retrySearch()">Try Again</button>
+        </div>
     </div>
 
     <!-- Modal -->
@@ -1009,10 +1049,10 @@
                     </div>
                     <div class="modal-meta-item">
                         <i class="fas fa-dollar-sign"></i>
-                        <span id="modalPrice"></span>
+                        <span id="modalPrice">Checking...</span>
                     </div>
                 </div>
-                <p class="modal-description" id="modalDescription"></p>
+                <p class="modal-description" id="modalDescription">Loading game details...</p>
                 <div class="modal-actions">
                     <button class="modal-btn primary" id="modalDownload">
                         <i class="fas fa-download"></i>
@@ -1038,7 +1078,8 @@
             currentFilter: 'all',
             currentView: 'grid',
             loading: false,
-            selectedGame: null
+            selectedGame: null,
+            lastQuery: 'counter-strike'
         };
 
         // DOM Elements
@@ -1047,6 +1088,8 @@
         const gamesGrid = document.getElementById('gamesGrid');
         const gamesList = document.getElementById('gamesList');
         const emptyState = document.getElementById('emptyState');
+        const errorState = document.getElementById('errorState');
+        const errorMessage = document.getElementById('errorMessage');
         const resultCount = document.getElementById('resultCount');
         const modal = document.getElementById('modal');
         const modalClose = document.getElementById('modalClose');
@@ -1122,46 +1165,79 @@
                 showToast('Please enter a search term', 'error');
                 return;
             }
+            state.lastQuery = query;
             await searchGames(query);
+        }
+
+        async function retrySearch() {
+            errorState.style.display = 'none';
+            await searchGames(state.lastQuery);
         }
 
         async function searchGames(query) {
             try {
                 setLoading(true);
                 state.loading = true;
+                hideError();
 
-                // API 1: Search games (ORIGINAL - tidak diubah)
-                const response = await fetch(`https://steam-search.vercel.app/api/games?search=${encodeURIComponent(query)}`);
-                const games = await response.json();
+                // API 1: Steam Search API (RESMI - Support CORS)
+                const searchUrl = `https://store.steampowered.com/search/results/?term=${encodeURIComponent(query)}&json=1&count=50`;
+                const response = await fetch(searchUrl);
 
-                if (games && games.length > 0) {
-                    // Enhance game data with additional APIs
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const data = await response.json();
+                const items = data.items || [];
+
+                if (items.length > 0) {
+                    // Process games - extract appid from logo URL and fetch details
                     const enhancedGames = await Promise.all(
-                        games.slice(0, 12).map(async (game) => {
-                            const appId = game.appid || game.id;
+                        items.slice(0, 12).map(async (item, index) => {
+                            // Extract appid from logo URL
+                            // Format: https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/{appid}/...
+                            const appIdMatch = item.logo.match(/steam\/apps\/(\d+)/);
+                            const appId = appIdMatch ? appIdMatch[1] : null;
 
-                            // API 2: Get Steam header image (TAMBAHAN)
+                            if (!appId) {
+                                console.warn('Could not extract appid from:', item.logo);
+                                return null;
+                            }
+
+                            // API 2: Steam Header Image (CDN - Tidak ada CORS)
                             const headerImage = `https://cdn.akamai.steamstatic.com/steam/apps/${appId}/header.jpg`;
 
-                            // API 3: Get Steam app details (TAMBAHAN)
-                            const steamDetails = await fetchSteamDetails(appId);
-
-                            // API 4: Verify from GitHub (ORIGINAL - tidak diubah)
+                            // API 3: Verify from GitHub (ORIGINAL - tidak diubah)
                             const verifyData = await verifyGame(appId);
 
+                            // API 4: Steam App Details (RESMI - CORS enabled via JSONP-like)
+                            // Note: Steam appdetails tidak support CORS, jadi kita skip untuk sekarang
+                            // atau gunakan proxy jika diperlukan
+
                             return {
-                                ...game,
-                                appId,
-                                headerImage,
-                                ...steamDetails,
-                                ...verifyData
+                                name: item.name,
+                                appId: appId,
+                                logo: item.logo,
+                                headerImage: headerImage,
+                                isVerified: verifyData.isVerified,
+                                lastUpdate: verifyData.lastUpdate,
+                                price: 'Check on Steam', // Akan diupdate via modal
+                                description: 'Click to view details'
                             };
                         })
                     );
 
-                    state.games = enhancedGames;
-                    filterGames();
-                    showToast(`Found ${enhancedGames.length} games`, 'success');
+                    // Filter out null results
+                    const validGames = enhancedGames.filter(g => g !== null);
+
+                    if (validGames.length > 0) {
+                        state.games = validGames;
+                        filterGames();
+                        showToast(`Found ${validGames.length} games`, 'success');
+                    } else {
+                        throw new Error('No valid games found');
+                    }
                 } else {
                     state.games = [];
                     renderEmpty();
@@ -1169,67 +1245,12 @@
                 }
             } catch (error) {
                 console.error('Search error:', error);
+                showError(error.message || 'Failed to fetch games');
                 showToast('Failed to search games', 'error');
-                renderEmpty();
             } finally {
                 setLoading(false);
                 state.loading = false;
             }
-        }
-
-        // Fetch Steam Details (API TAMBAHAN)
-        async function fetchSteamDetails(appId) {
-            try {
-                const response = await fetch(`https://store.steampowered.com/api/appdetails?appids=${appId}`);
-                const data = await response.json();
-                const gameData = data[appId]?.data;
-
-                if (gameData) {
-                    return {
-                        name: gameData.name, // Judul yang benar dari Steam
-                        description: gameData.short_description || 'No description available',
-                        detailedDescription: gameData.detailed_description || '',
-                        aboutTheGame: gameData.about_the_game || '',
-                        price: gameData.is_free ? 'Free to Play' : (gameData.price_overview?.final_formatted || 'N/A'),
-                        originalPrice: gameData.price_overview?.initial_formatted || null,
-                        discount: gameData.price_overview?.discount_percent || 0,
-                        genres: gameData.genres?.slice(0, 3).map(g => g.description) || [],
-                        categories: gameData.categories?.slice(0, 3).map(c => c.description) || [],
-                        releaseDate: gameData.release_date?.date || 'Unknown',
-                        comingSoon: gameData.release_date?.coming_soon || false,
-                        developers: gameData.developers || ['Unknown'],
-                        publishers: gameData.publishers || ['Unknown'],
-                        platforms: gameData.platforms || {},
-                        metacritic: gameData.metacritic?.score || null,
-                        recommendations: gameData.recommendations?.total || 0,
-                        isFree: gameData.is_free,
-                        type: gameData.type
-                    };
-                }
-            } catch (error) {
-                console.error('Steam details API error:', error);
-            }
-
-            return {
-                name: null,
-                description: 'No description available',
-                detailedDescription: '',
-                aboutTheGame: '',
-                price: 'N/A',
-                originalPrice: null,
-                discount: 0,
-                genres: [],
-                categories: [],
-                releaseDate: 'Unknown',
-                comingSoon: false,
-                developers: ['Unknown'],
-                publishers: ['Unknown'],
-                platforms: {},
-                metacritic: null,
-                recommendations: 0,
-                isFree: false,
-                type: 'game'
-            };
         }
 
         // Verify Game (API ORIGINAL - tidak diubah)
@@ -1249,6 +1270,40 @@
                     commitSha: 'Unknown'
                 };
             }
+        }
+
+        // Fetch Steam Details for Modal (dengan error handling CORS)
+        async function fetchSteamDetailsForModal(appId) {
+            try {
+                // Coba fetch appdetails (mungkin gagal karena CORS di beberapa browser)
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 5000);
+
+                const response = await fetch(`https://store.steampowered.com/api/appdetails?appids=${appId}`, {
+                    signal: controller.signal
+                });
+                clearTimeout(timeoutId);
+
+                if (!response.ok) throw new Error('Failed to fetch details');
+
+                const data = await response.json();
+                const gameData = data[appId]?.data;
+
+                if (gameData) {
+                    return {
+                        name: gameData.name,
+                        description: gameData.short_description || gameData.detailed_description || 'No description available',
+                        price: gameData.is_free ? 'Free to Play' : (gameData.price_overview?.final_formatted || 'N/A'),
+                        genres: gameData.genres?.slice(0, 3).map(g => g.description) || [],
+                        releaseDate: gameData.release_date?.date || 'Unknown',
+                        developers: gameData.developers || ['Unknown'],
+                        isFree: gameData.is_free
+                    };
+                }
+            } catch (error) {
+                console.log('Steam details fetch failed (CORS likely):', error);
+            }
+            return null;
         }
 
         // Filter Games
@@ -1293,6 +1348,7 @@
             }
 
             emptyState.style.display = 'none';
+            errorState.style.display = 'none';
             const container = state.currentView === 'grid' ? gamesGrid : gamesList;
             container.innerHTML = '';
 
@@ -1308,26 +1364,12 @@
             card.className = `game-card ${state.currentView === 'list' ? 'list-view' : ''}`;
             card.style.animationDelay = `${index * 0.1}s`;
 
-            // Gunakan nama dari Steam API jika tersedia, fallback ke nama dari search API
-            const displayName = game.name || game.name || 'Unknown Game';
-
-            const priceClass = game.isFree ? 'free' : 'paid';
             const verifiedBadge = game.isVerified 
                 ? `<span class="game-badge verified"><i class="fas fa-check-circle"></i> Verified</span>`
                 : `<span class="game-badge unverified"><i class="fas fa-exclamation-triangle"></i> Unverified</span>`;
 
             // Gunakan header image dari Steam CDN
-            const imageHtml = `<img class="game-image" src="${game.headerImage}" alt="${displayName}" loading="lazy" onerror="this.parentElement.innerHTML='<div class=\'game-image-placeholder\'><i class=\'fas fa-gamepad\'></i></div>'">`;
-
-            const tagsHtml = game.genres?.length > 0 
-                ? `<div class="game-tags">${game.genres.map(g => `<span class="game-tag">${g}</span>`).join('')}</div>`
-                : '';
-
-            // Format harga dengan discount jika ada
-            let priceDisplay = game.price;
-            if (game.discount > 0) {
-                priceDisplay = `<span style="text-decoration: line-through; opacity: 0.6;">${game.originalPrice}</span> ${game.price}`;
-            }
+            const imageHtml = `<img class="game-image" src="${game.headerImage}" alt="${game.name}" loading="lazy" onerror="this.parentElement.innerHTML='<div class=\'game-image-placeholder\'><i class=\'fas fa-gamepad\'></i></div>'">`;
 
             card.innerHTML = `
                 <div class="game-image-container">
@@ -1335,15 +1377,13 @@
                     ${verifiedBadge}
                 </div>
                 <div class="game-content">
-                    <h3 class="game-title">${displayName}</h3>
+                    <h3 class="game-title">${game.name}</h3>
                     <div class="game-meta">
-                        <span class="game-meta-item"><i class="fas fa-code"></i> ${game.developers[0]}</span>
-                        <span class="game-meta-item"><i class="fas fa-calendar"></i> ${game.releaseDate}</span>
-                        ${game.metacritic ? `<span class="game-meta-item" style="color: var(--accent);"><i class="fas fa-star"></i> ${game.metacritic}</span>` : ''}
+                        <span class="game-meta-item"><i class="fas fa-tag"></i> App ID: ${game.appId}</span>
+                        <span class="game-meta-item"><i class="fas fa-calendar"></i> ${new Date(game.lastUpdate).toLocaleDateString()}</span>
                     </div>
-                    ${tagsHtml}
                     <div class="game-footer">
-                        <span class="game-price ${priceClass}">${priceDisplay}</span>
+                        <span class="game-price">${game.price}</span>
                         <button class="download-btn" onclick="event.stopPropagation(); downloadGame(${game.appId})">
                             <i class="fas fa-download"></i> Get
                         </button>
@@ -1360,7 +1400,23 @@
             gamesGrid.innerHTML = '';
             gamesList.innerHTML = '';
             emptyState.style.display = 'block';
+            errorState.style.display = 'none';
             resultCount.textContent = '0';
+        }
+
+        // Show Error
+        function showError(message) {
+            gamesGrid.innerHTML = '';
+            gamesList.innerHTML = '';
+            emptyState.style.display = 'none';
+            errorState.style.display = 'block';
+            errorMessage.textContent = message;
+            resultCount.textContent = '0';
+        }
+
+        // Hide Error
+        function hideError() {
+            errorState.style.display = 'none';
         }
 
         // Render Skeleton Loading
@@ -1368,6 +1424,7 @@
             const container = state.currentView === 'grid' ? gamesGrid : gamesList;
             container.innerHTML = '';
             emptyState.style.display = 'none';
+            errorState.style.display = 'none';
 
             for (let i = 0; i < 6; i++) {
                 const skeleton = document.createElement('div');
@@ -1397,23 +1454,35 @@
         }
 
         // Open Modal
-        function openModal(game) {
+        async function openModal(game) {
             state.selectedGame = game;
 
-            // Gunakan nama dari Steam API
-            const displayName = game.name || game.name || 'Unknown Game';
-
-            document.getElementById('modalTitle').textContent = displayName;
+            document.getElementById('modalTitle').textContent = game.name;
             document.getElementById('modalAppId').textContent = `App ID: ${game.appId}`;
             document.getElementById('modalStatus').textContent = game.isVerified ? 'Verified Crack Available' : 'Unverified Source';
             document.getElementById('modalStatus').style.color = game.isVerified ? 'var(--success)' : 'var(--warning)';
             document.getElementById('modalDate').textContent = `Updated: ${new Date(game.lastUpdate).toLocaleDateString()}`;
-            document.getElementById('modalPrice').textContent = game.price;
-            document.getElementById('modalDescription').textContent = game.detailedDescription || game.description || 'No description available.';
             document.getElementById('modalImage').src = game.headerImage;
+
+            // Reset description dan price
+            document.getElementById('modalDescription').textContent = 'Loading game details...';
+            document.getElementById('modalPrice').textContent = 'Checking...';
 
             modal.classList.add('active');
             document.body.style.overflow = 'hidden';
+
+            // Coba fetch detail tambahan
+            const details = await fetchSteamDetailsForModal(game.appId);
+            if (details) {
+                document.getElementById('modalDescription').textContent = details.description;
+                document.getElementById('modalPrice').textContent = details.price;
+                if (details.name) {
+                    document.getElementById('modalTitle').textContent = details.name;
+                }
+            } else {
+                document.getElementById('modalDescription').textContent = 'Game details unavailable. Click "View on Steam" to see more information.';
+                document.getElementById('modalPrice').textContent = 'Check on Steam';
+            }
         }
 
         // Close Modal
