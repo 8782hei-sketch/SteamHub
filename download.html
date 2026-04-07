@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Download SteamHub - Modern Steam Library Manager">
+	<link rel="icon" type="image/x-icon" href="favicon.ico">
+    <title>Download - SteamHub</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body { 
+            font-family: 'Plus Jakarta Sans', sans-serif; 
+            background: linear-gradient(135deg, #0f0f1a 0%, #1a1a2e 50%, #16213e 100%);
+            color: #e0e0ff;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .main-card {
+            background: rgba(30, 30, 46, 0.8);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 24px;
+            padding: 48px;
+            max-width: 600px;
+            width: 100%;
+            box-shadow: 
+                0 0 0 1px rgba(139, 92, 246, 0.1),
+                0 20px 60px rgba(0, 0, 0, 0.5),
+                0 0 80px rgba(139, 92, 246, 0.1);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .main-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, #8b5cf6, #6366f1, transparent);
+            opacity: 0.6;
+        }
+
+        .title {
+            font-size: 2.5rem;
+            font-weight: 800;
+            color: #f0f0ff;
+            text-align: center;
+            margin-bottom: 8px;
+            letter-spacing: -0.5px;
+        }
+
+        .subtitle {
+            text-align: center;
+            color: #a0a0c0;
+            font-size: 1rem;
+            margin-bottom: 20px;
+        }
+
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(139, 92, 246, 0.15);
+            border: 1px solid rgba(139, 92, 246, 0.3);
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 0.875rem;
+            font-weight: 500;
+            color: #c4b5fd;
+            margin-bottom: 32px;
+        }
+
+        .badge i {
+            color: #8b5cf6;
+        }
+
+        .file-card {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            border-radius: 16px;
+            padding: 20px;
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            margin-bottom: 20px;
+            transition: all 0.3s ease;
+        }
+
+        .file-card:hover {
+            background: rgba(255, 255, 255, 0.05);
+            border-color: rgba(139, 92, 246, 0.2);
+        }
+
+        .file-icon {
+            width: 56px;
+            height: 56px;
+            background: linear-gradient(135deg, rgba(139, 92, 246, 0.2) 0%, rgba(99, 102, 241, 0.2) 100%);
+            border-radius: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid rgba(139, 92, 246, 0.3);
+            flex-shrink: 0;
+        }
+
+        .file-icon i {
+            font-size: 1.5rem;
+            color: #a78bfa;
+        }
+
+        .file-info h3 {
+            font-size: 1.125rem;
+            font-weight: 600;
+            color: #f0f0ff;
+            margin-bottom: 6px;
+        }
+
+        .file-meta {
+            display: flex;
+            gap: 16px;
+            font-size: 0.875rem;
+            color: #8080a0;
+        }
+
+        .file-meta span {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .file-meta i {
+            font-size: 0.875rem;
+        }
+
+        .secure-badge {
+            color: #4ade80;
+        }
+
+        .download-btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            width: 100%;
+            padding: 16px 24px;
+            background: transparent;
+            border: 2px solid rgba(139, 92, 246, 0.5);
+            border-radius: 12px;
+            color: #c4b5fd;
+            font-size: 1rem;
+            font-weight: 600;
+            text-decoration: none;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .download-btn::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(135deg, rgba(139, 92, 246, 0.1) 0%, rgba(99, 102, 241, 0.1) 100%);
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .download-btn:hover {
+            border-color: rgba(139, 92, 246, 0.8);
+            color: #e0d4ff;
+            transform: translateY(-2px);
+            box-shadow: 0 10px 30px rgba(139, 92, 246, 0.2);
+        }
+
+        .download-btn:hover::before {
+            opacity: 1;
+        }
+
+        .download-btn span,
+        .download-btn i {
+            position: relative;
+            z-index: 1;
+        }
+
+        .footer {
+            text-align: center;
+            margin-top: 32px;
+            font-size: 0.875rem;
+            color: #606080;
+        }
+
+        .footer a {
+            color: #8b5cf6;
+            text-decoration: none;
+            font-weight: 600;
+        }
+
+        .footer a:hover {
+            text-decoration: underline;
+        }
+
+        .back-link {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            color: #8080a0;
+            text-decoration: none;
+            font-size: 0.875rem;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            transition: color 0.3s ease;
+        }
+
+        .back-link:hover {
+            color: #c4b5fd;
+        }
+
+        @media (max-width: 640px) {
+            .main-card {
+                padding: 32px 24px;
+            }
+
+            .title {
+                font-size: 2rem;
+            }
+
+            .file-meta {
+                flex-wrap: wrap;
+                gap: 8px;
+            }
+        }
+    </style>
+<base target="_blank">
+</head>
+<body>
+    <div class="main-card">
+        <a href="index.html" class="back-link">
+            <i class="fa-solid fa-arrow-left"></i>
+            Kembali
+        </a>
+
+        <h1 class="title">SteamHub</h1>
+        <p class="subtitle">Quick and secure installation</p>
+
+        <div style="text-align: center;">
+            <div class="badge">
+                <i class="fa-solid fa-gamepad"></i>
+                <span>Steam Library Manager</span>
+            </div>
+        </div>
+
+        <div class="file-card">
+            <div class="file-icon">
+                <i class="fa-brands fa-windows"></i>
+            </div>
+            <div class="file-info">
+                <h3>SteamHub</h3>
+                <div class="file-meta">
+                    <span><i class="fa-solid fa-weight-hanging"></i> 30 MB</span>
+                    <span><i class="fa-regular fa-calendar"></i> 07-04-2026</span>
+                    <span class="secure-badge"><i class="fa-solid fa-shield-halved"></i> Secure</span>
+                </div>
+            </div>
+        </div>
+
+        <a href="https://pixeldrain.com/u/5duaWj6g" class="download-btn">
+            <i class="fa-solid fa-cloud-arrow-down"></i>
+            <span>Download</span>
+        </a>
+
+        <div class="footer">
+            © Since 2026 SteamHub - Developed by <a href="#">SteamHub Team</a>
+        </div>
+    </div>
+</body>
+</html>
